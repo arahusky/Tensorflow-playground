@@ -18,16 +18,15 @@ def capitalize_words(words, probs):
 
     return res
 
+new_config = Config()
+with open(os.path.join(new_config.save_dir, 'config.pkl'), 'rb') as f:
+    config = cPickle.load(f)
 
 sentence_to_capitalize = 'a man went to london on tuesday. this city lies in uk, where this peter griffin was born '
 
-config = Config()
+loader = text_loader.TextLoader(config)
 
-
-with open(os.path.join(text_loader.TextLoader.CACHE_FOLDER, 'vocab.pkl'), 'rb') as f:
-    words = cPickle.load(f)
-
-vocab = dict(zip(words, range(len(words))))
+vocab = loader.vocab
 config.vocab_size = len(vocab)
 
 
@@ -50,3 +49,9 @@ with tf.Session() as sess:
         probs = sess.run([model.probs], feed)
         print(probs)
         print(capitalize_words(nltk.word_tokenize(sentence_to_capitalize), probs[0]))
+
+        # eval test set accuracy
+        test_batches_x, test_batches_y = loader.get_test_set()
+        print('test_batches_x.shape, test_batches_y.shape', test_batches_x.shape, test_batches_y.shape)
+        feed = {model.input_data: test_batches_x, model.targets: test_batches_y}
+        print('Test set accuracy: ' + str(sess.run(model.accuracy, feed)))

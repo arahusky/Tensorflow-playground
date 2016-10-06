@@ -38,14 +38,13 @@ def train():
 
         # open saved vocab/dict and check if vocabs/dicts are compatible
         with open(os.path.join(config.init_from, 'vocab.pkl'), 'rb') as f:
-            saved_words, saved_vocab = cPickle.load(f)
-        assert saved_words == data_loader.words, "Data and loaded model disagreee on word set!"
+            saved_vocab = cPickle.load(f)
         assert saved_vocab == data_loader.vocab, "Data and loaded model disagreee on dictionary mappings!"
 
     with open(os.path.join(config.save_dir, 'config.pkl'), 'wb') as f:
         cPickle.dump(config, f)
     with open(os.path.join(config.save_dir, 'vocab.pkl'), 'wb') as f:
-        cPickle.dump((data_loader.words, data_loader.vocab), f)
+        cPickle.dump(data_loader.vocab, f)
 
     print('Creating model')
     model = Model(config)
