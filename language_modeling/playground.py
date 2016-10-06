@@ -28,8 +28,8 @@ print('Probabibility of sequence "Is pnce" is: ', utils.compute_seq_prob(['I', '
 
 # 2. sample text
 
-config.n = 1000 # number of characters (words in case of word-level LM) to sample
-config.prime = 'C' # starting character
+config.n = 2000 # number of characters (words in case of word-level LM) to sample
+config.prime = 'A' # starting character
 config.sample = 1 # way, how to choose probable text: 0 to use max at each timestep, 1 to sample at each timestep, 2 to sample on spaces
 
 utils.sample(config, model, is_char_model = True)

@@ -1,10 +1,8 @@
 # Language modeling
 
-Multi-layer Recurrent Neural Networks (LSTM, RNN) for char or word-level language models in Python using TensorFlow.
+Multi-layer Recurrent Neural Networks (LSTM, RNN) for char and word-level language models in Python using TensorFlow.
 
-Mostly reused code from https://github.com/sherjilozair/char-rnn-tensorflow.
-
-For word language models see also https://github.com/hunkim/word-rnn-tensorflow.
+Mostly reused code from https://github.com/sherjilozair/char-rnn-tensorflow and https://github.com/hunkim/word-rnn-tensorflow.
 
 # Requirements
 - [Tensorflow](http://www.tensorflow.org)

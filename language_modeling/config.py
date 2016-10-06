@@ -1,7 +1,7 @@
 # This file contains single class with constants used in the project.
 class Config():
     # dataset
-    data_dir = 'data/tinyshakespeare' # data directory containing input.txt
+    data_dir = 'data/bible' # data directory containing input.txt
 
     # training parameters
     batch_size = 50
