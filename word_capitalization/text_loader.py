@@ -8,6 +8,7 @@ import numpy as np
 import re
 import nltk
 import config
+import utils
 
 
 class TextLoader():
@@ -22,14 +23,13 @@ class TextLoader():
     def __init__(self, config, data_dir='bbc'):
         self.data_dir = data_dir
         self.batch_size = config.batch_size
-        self.seq_length = config.seq_length
 
         train_percentage = config.train_
         valid_percentage = config.validation
         test_percentage = config.test
 
         vocab_file = os.path.join(self.CACHE_FOLDER, 'vocab.pkl')
-        data_file = os.path.join(self.CACHE_FOLDER, 'data.npy')
+        data_file = os.path.join(self.CACHE_FOLDER, 'data.pkl')
 
         if not (os.path.exists(vocab_file) and os.path.exists(data_file)):
             print('Preprocessing')
@@ -89,6 +89,9 @@ class TextLoader():
         Returns vocabulary mapping and all appeared words.
         """
 
+        print(words[0])
+        print(type(words[0]))
+
         # Build vocabulary
         word_counts = collections.Counter(words)
         # for each word its number of occurence
@@ -106,14 +109,22 @@ class TextLoader():
         # Text cleaning
         # data = self.clean_str(data)
 
-        x_text = nltk.word_tokenize(data, language='english')
-        self.labels = np.array(['1' if word[0].isupper() else '0' for word in x_text])
-        # self.labels = np.array(['1' if (word=='the') else '0' for word in x_text])
+        sentences = nltk.sent_tokenize(data, language='english')
 
-        # convert all words to lower-case version
-        x_text = map((lambda x: x.lower()), x_text)
+        # Remove too long sentences
+        sentences = [sentence for sentence in sentences if len(sentence) < 100] # removes only about 5 sentences
 
-        self.vocab = self.build_vocab(x_text)
+        # Create labels
+        self.labels = []
+        for sentence in sentences:
+            words = nltk.word_tokenize(sentence, language='english')
+            self.labels.append(np.array(['1' if word[0].isupper() else '0' for word in words]))
+
+        # convert every letter to lower-case version
+        x_text = map((lambda x: x.lower()), sentences)
+
+        sentences_as_seq_of_words = [nltk.word_tokenize(sentence, language='english') for sentence in x_text]
+        self.vocab = self.build_vocab(utils.flatten_list_of_lists(sentences_as_seq_of_words))
         words = self.vocab.keys()
         # vocab is a dictionary {"word" : ID}
         # words is just a list of words that appeared in the text
@@ -122,22 +133,24 @@ class TextLoader():
         with open(vocab_file, 'wb') as f:
             cPickle.dump(self.vocab, f)
 
-        # The same operation like this [self.vocab[word] for word in x_text]
-        # index of words as our basic data
-        self.inputs = np.array(list(map(self.vocab.get, x_text)))  # one-dimensional tensor
-        # Save the data to data.npy
-        np.save(data_file, (self.inputs, self.labels))
+        # inputs is a list of numpy arrays, where each inner array is an ID sequence representing one sentence
+        self.inputs = [np.array(map(self.vocab.get, sentence)) for sentence in sentences_as_seq_of_words]
+        print('Saving data')
+        # Save data
+        with open(data_file, 'wb') as f:
+            cPickle.dump((self.inputs, self.labels), f)
 
     def load_preprocessed(self, vocab_file, data_file):
         with open(vocab_file, 'rb') as f:
             self.vocab = cPickle.load(f)
         self.words = self.vocab.keys()
         self.vocab_size = len(self.words)
-        self.inputs, self.labels = np.load(data_file)
+        with open(data_file, 'rb') as f:
+            self.inputs, self.labels = cPickle.load(f)
 
     def create_batches(self, train_percentage, valid_percentage, test_percentage):
-        num_available_batches = int(self.inputs.size / (self.batch_size *
-                                                        self.seq_length))
+        # TODO rename me
+        num_available_batches = int(len(self.inputs) / self.batch_size)
 
         # counts in means of batches
         self.num_batches = int(round(num_available_batches * train_percentage))  # number of train batches prepared
@@ -146,61 +159,75 @@ class TextLoader():
         num_test_batches = num_available_batches - self.num_batches - num_validation_batches  # number of test batches prepared
 
         # counts in means of samples
-        num_train_samples = self.num_batches * self.batch_size * self.seq_length
-        num_validation_samples = num_validation_batches * self.batch_size * self.seq_length
-        num_test_samples = num_test_batches * self.batch_size * self.seq_length
+        num_train_samples = self.num_batches * self.batch_size
+        num_validation_samples = num_validation_batches * self.batch_size
+        num_test_samples = num_test_batches * self.batch_size
 
         if self.num_batches == 0:
-            assert False, "Not enough data. Make seq_length and batch_size smaller."
+            assert False, "Not enough data. Make batch_size smaller."
 
         print(str(self.num_batches) + ' train batches available')
         print(str(num_validation_batches) + ' validation batches available')
         print(str(num_test_batches) + ' test batches available')
         # cut end part after the last expected batch to ensure that the data can be splitted into batches with no padding
-        max_length = num_available_batches * self.batch_size * self.seq_length  # how many samples may be prepared
+        max_length = num_available_batches * self.batch_size  # how many samples may be prepared
         self.inputs = self.inputs[:max_length]
         self.labels = self.labels[:max_length]
 
-        # cut tensor in train, validation and test sets
-        train_xdata = self.inputs[:num_train_samples]
-        train_ydata = self.labels[:num_train_samples]
+        # split tensor into train, validation and test sets
+        self.train_xdata = self.inputs[:num_train_samples]
+        self.train_ydata = self.labels[:num_train_samples]
 
-        validation_xdata = self.inputs[num_train_samples:num_train_samples + num_validation_samples]
-        validation_ydata = self.labels[num_train_samples:num_train_samples + num_validation_samples]
+        self.validation_xdata = self.inputs[num_train_samples:num_train_samples + num_validation_samples]
+        self.validation_ydata = self.labels[num_train_samples:num_train_samples + num_validation_samples]
 
-        test_xdata = self.inputs[num_train_samples + num_validation_samples:]
-        test_ydata = self.labels[num_train_samples + num_validation_samples:]
-        print(train_xdata.shape, train_ydata.shape, validation_xdata.shape, validation_ydata.shape, test_xdata.shape,
-              test_ydata.shape)
+        self.test_xdata = self.inputs[num_train_samples + num_validation_samples:]
+        self.test_ydata = self.labels[num_train_samples + num_validation_samples:]
 
-        # to create batches, first reshape data to have self.batch_size rows (each column contains one input),
-        # and then split this large matrix with split into self.num_batches (split along columns)
-        self.train_x_batches = np.split(train_xdata.reshape(self.batch_size, -1), self.num_batches, 1)
-        self.train_y_batches = np.split(train_ydata.reshape(self.batch_size, -1), self.num_batches, 1)
-
-        if num_validation_batches != 0:  # no validation data required
-            self.validation_x_batches = validation_xdata.reshape(num_validation_batches * self.batch_size, -1)
-            self.validation_y_batches = validation_ydata.reshape(num_validation_batches * self.batch_size, -1)
-        else:
-            self.validation_x_batches = np.array([])
-            self.validation_y_batches = np.array([])
-
-        self.test_x_batches = test_xdata.reshape(num_test_batches * self.batch_size, -1)
-        self.test_y_batches = test_ydata.reshape(num_test_batches * self.batch_size, -1)
+        # create numpy array for saving current batch
+        print(type(self.train_xdata))
+        print(type(self.train_xdata[0]))
+        self.max_len = max([row.shape[0] for row in self.train_xdata])  # max len (in # words) of train sentence
+        print('self.max_len' + str(self.max_len))
+        self.batch_x = np.zeros((self.batch_size, self.max_len), dtype=np.int32)
+        self.batch_x_lenghts = np.zeros(self.batch_size, dtype=np.int32)  # contains for each train sentence its length
+        self.batch_y = np.zeros((self.batch_size, self.max_len), dtype=np.int32)  # contains for each train sentence its word labels
 
     def next_batch(self):
         '''
-        Returns next train batch.
+        Returns next train batch.  Each batch consists of three parts:
+            batch_x ; contains self.num_batches of train inputs with variable lengths, note that this array has
+             dimensions [self.num_batches, max_length], where max_length is a length of the longest sequence in the training set
+            batch_x_length: for each sequence in the batch contains its length
+            batch_y: contains labels for batch_x inputs
         '''
-        x, y = self.train_x_batches[self.pointer], self.train_y_batches[self.pointer]
-        self.pointer += 1
-        return x, y
+        for sample_ind in range(self.batch_size):
+            self.batch_x_lenghts[sample_ind] = len(self.train_xdata[self.pointer])
+
+            for seq_ind in range(self.batch_x_lenghts[sample_ind]):
+                self.batch_x[sample_ind][seq_ind] = self.train_xdata[self.pointer][seq_ind]
+                self.batch_y[sample_ind][seq_ind] = self.train_ydata[self.pointer][seq_ind]
+            self.pointer += 1
+        return self.batch_x, self.batch_x_lenghts, self.batch_y
 
     def get_test_set(self):
         '''
         Returns matrix containing test data.
         '''
-        return (self.test_x_batches, self.test_y_batches)
+
+        # if self.test_x_data is None:
+        self.test_x_data = np.zeros((len(self.test_xdata), self.max_len))
+        self.test_x_data_lengths = np.zeros(len(self.test_xdata))
+        self.test_y_data = np.zeros((len(self.test_xdata), self.max_len))
+
+        for sample_ind in range(len(self.test_xdata)):
+            self.test_x_data_lengths[sample_ind] = len(self.test_xdata[sample_ind])
+
+            for seq_ind in range(len(self.test_xdata[sample_ind])):
+                self.test_x_data[sample_ind][seq_ind] = self.train_xdata[sample_ind][seq_ind]
+                self.test_y_data[sample_ind][seq_ind] = self.train_ydata[sample_ind][seq_ind]
+
+        return (self.test_x_data, self.test_x_data_lengths, self.test_y_data)
 
     def get_validation_set(self):
         '''
@@ -209,5 +236,14 @@ class TextLoader():
         return (self.validation_x_batches, self.validation_y_batches)
 
     def reset_batch_pointer(self):
+        # TODO check if sklearn.utils.shuffle is not better
+        permutation = np.random.permutation(len(self.train_xdata))
+
+        # works only with np.arrays
+        # self.train_xdata = self.train_xdata[permutation]
+        # self.train_ydata = self.train_ydata[permutation]
+
+        self.train_xdata = [self.train_xdata[i] for i in permutation]
+        self.train_ydata = [self.train_ydata[i] for i in permutation]
+        
         self.pointer = 0
-        # todo possibly permutate inside array

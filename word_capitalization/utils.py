@@ -40,3 +40,6 @@ def load_glove():
             line = reader.readline()
 
     return glove_mapping
+
+def flatten_list_of_lists(list_of_lists):
+    return [val for sublist in list_of_lists for val in sublist]

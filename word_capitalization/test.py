@@ -55,3 +55,5 @@ with tf.Session() as sess:
         print('test_batches_x.shape, test_batches_y.shape', test_batches_x.shape, test_batches_y.shape)
         feed = {model.input_data: test_batches_x, model.targets: test_batches_y}
         print('Test set accuracy: ' + str(sess.run(model.accuracy, feed)))
+
+tf.nn.dynamic_rnn()

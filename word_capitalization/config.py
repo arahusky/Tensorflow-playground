@@ -7,7 +7,6 @@ class Config():
 
     # training parameters
     batch_size = 50
-    seq_length = 3 # length (in words) of each text
     embedding_size = 100
     num_epochs = 50
     grad_clip = 5. # clip gradients at this value
@@ -17,6 +16,10 @@ class Config():
     model = 'gru'  # rnn, gru, or lstm
     num_layers = 2 # number of layers in the RNN
     rnn_size = 150 # size of RNN hidden state
+
+
+    #TODO remove me
+    max_length = 30
 
     # other stuff
     save_dir = 'save' # directory to store checkpointed models
