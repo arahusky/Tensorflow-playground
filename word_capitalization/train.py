@@ -62,16 +62,11 @@ def train():
             for b in range(data_loader.num_batches):
                 start = time.time()
 
-                fw_inital_state = model.fw_initial_state.eval()
-                bw_inital_state = model.bw_initial_state.eval()
-
                 x, lengths, y = data_loader.next_batch()
                 print('x.shape' + str(x.shape) + 'y,shape' + str(y.shape))
                 feed = {model.input_data: x,
                         model.targets: y,
-                        model.inputs_lengths: lengths,
-                        model.fw_initial_state: fw_inital_state,
-                        model.bw_initial_state: bw_inital_state}
+                        model.inputs_lengths: lengths}
                 train_loss, acc, _ = sess.run([model.cost, model.accuracy, model.optimizer], feed)
                 end = time.time()
 
@@ -81,22 +76,16 @@ def train():
                     checkpoint_path = os.path.join(config.save_dir, 'model.ckpt')
                     saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b)
                     print("model saved to {}".format(checkpoint_path))
-                elif ((e * data_loader.num_batches + b) % 10 == 0):  # print test accuracy
-                    test_x, test_lengths, test_y = data_loader.get_test_set()
+                elif ((e * data_loader.num_batches + b) % 100 == 0):  # print test accuracy
+                    test_batches_x, test_batches_lengths, test_batches_y = data_loader.get_test_set()
 
                     accuracy = 0.0
-                    # for test_x, test_y in zip(test_batches_x, test_batches_y):
-                    fw_inital_state = model.fw_initial_state.eval()
-                    bw_inital_state = model.bw_initial_state.eval()
-                    feed = {model.input_data: test_x,
-                            model.targets: test_y,
-                            model.inputs_lengths: test_lengths,
-                            model.fw_initial_state: fw_inital_state,
-                            model.bw_initial_state: bw_inital_state}
-                    # accuracy += sess.run(model.accuracy, feed)
-                    print('Test set accuracy: ' + str(sess.run(model.accuracy, feed)))
-
-                    # print('Test set accuracy is: ' + str(accuracy / len(test_batches_x)))
+                    for test_x, test_lengths, test_y in zip(test_batches_x, test_batches_lengths, test_batches_y):
+                        feed = {model.input_data: test_x,
+                                model.targets: test_y,
+                                model.inputs_lengths: test_lengths}
+                        accuracy += sess.run(model.accuracy, feed)
+                    print('Test set accuracy is: ' + str(accuracy / len(test_batches_x)))
 
                 print("{}/{} (epoch {}), train_loss = {:.3f}, train_acc = {:.3f}, time/batch = {:.3f}" \
                       .format(e * data_loader.num_batches + b,

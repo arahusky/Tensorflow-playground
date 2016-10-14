@@ -1,5 +1,7 @@
 *.pyc
 *.ipynb
 *.*~
-word_capitalization/cache
+word_capitalization/save/*
 *model.ckpt*
+*/logs/*
+*/.idea/*

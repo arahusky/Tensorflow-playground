@@ -112,7 +112,7 @@ class TextLoader():
         sentences = nltk.sent_tokenize(data, language='english')
 
         # Remove too long sentences
-        sentences = [sentence for sentence in sentences if len(sentence) < 100] # removes only about 5 sentences
+        sentences = [sentence for sentence in sentences if len(sentence) < 100]  # removes only about 5 sentences
 
         # Create labels
         self.labels = []
@@ -135,6 +135,12 @@ class TextLoader():
 
         # inputs is a list of numpy arrays, where each inner array is an ID sequence representing one sentence
         self.inputs = [np.array(map(self.vocab.get, sentence)) for sentence in sentences_as_seq_of_words]
+
+        # BBC articles are sorted according to topic, which makes the classic train/test split of this array topic-biased
+        permutation = np.random.permutation(len(self.inputs))
+        self.inputs = [self.inputs[i] for i in permutation]
+        self.labels = [self.labels[i] for i in permutation]
+
         print('Saving data')
         # Save data
         with open(data_file, 'wb') as f:
@@ -191,7 +197,8 @@ class TextLoader():
         print('self.max_len' + str(self.max_len))
         self.batch_x = np.zeros((self.batch_size, self.max_len), dtype=np.int32)
         self.batch_x_lenghts = np.zeros(self.batch_size, dtype=np.int32)  # contains for each train sentence its length
-        self.batch_y = np.zeros((self.batch_size, self.max_len), dtype=np.int32)  # contains for each train sentence its word labels
+        self.batch_y = np.zeros((self.batch_size, self.max_len),
+                                dtype=np.int32)  # contains for each train sentence its word labels
 
     def next_batch(self):
         '''
@@ -212,22 +219,24 @@ class TextLoader():
 
     def get_test_set(self):
         '''
-        Returns matrix containing test data.
+        Returns list of test batches.
         '''
-
-        # if self.test_x_data is None:
-        self.test_x_data = np.zeros((len(self.test_xdata), self.max_len))
+        testdata_samples = len(self.test_xdata)
+        self.test_x_data = np.zeros((testdata_samples, self.max_len))
         self.test_x_data_lengths = np.zeros(len(self.test_xdata))
-        self.test_y_data = np.zeros((len(self.test_xdata), self.max_len))
+        self.test_y_data = np.zeros((testdata_samples, self.max_len))
 
         for sample_ind in range(len(self.test_xdata)):
             self.test_x_data_lengths[sample_ind] = len(self.test_xdata[sample_ind])
 
             for seq_ind in range(len(self.test_xdata[sample_ind])):
-                self.test_x_data[sample_ind][seq_ind] = self.train_xdata[sample_ind][seq_ind]
-                self.test_y_data[sample_ind][seq_ind] = self.train_ydata[sample_ind][seq_ind]
+                self.test_x_data[sample_ind][seq_ind] = self.test_xdata[sample_ind][seq_ind]
+                self.test_y_data[sample_ind][seq_ind] = self.test_y_data[sample_ind][seq_ind]
 
-        return (self.test_x_data, self.test_x_data_lengths, self.test_y_data)
+        num_testdata_batches = testdata_samples / self.batch_size
+        return (
+        np.split(self.test_x_data, num_testdata_batches), np.split(self.test_x_data_lengths, num_testdata_batches),
+        np.split(self.test_y_data, num_testdata_batches))
 
     def get_validation_set(self):
         '''
@@ -245,5 +254,5 @@ class TextLoader():
 
         self.train_xdata = [self.train_xdata[i] for i in permutation]
         self.train_ydata = [self.train_ydata[i] for i in permutation]
-        
+
         self.pointer = 0

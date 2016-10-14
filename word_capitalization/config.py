@@ -17,10 +17,6 @@ class Config():
     num_layers = 2 # number of layers in the RNN
     rnn_size = 150 # size of RNN hidden state
 
-
-    #TODO remove me
-    max_length = 30
-
     # other stuff
     save_dir = 'save' # directory to store checkpointed models
     save_every = 1000 # save frequency

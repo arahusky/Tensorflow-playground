@@ -36,7 +36,6 @@ x = np.array([vocab[word] for word in words])
 x = x.reshape((1,len(words)))
 print(sentence_to_capitalize, x, x.shape)
 
-config.seq_length = len(words)
 model = model.Model(config, infer=True)
 
 with tf.Session() as sess:
@@ -45,15 +44,17 @@ with tf.Session() as sess:
     ckpt = tf.train.get_checkpoint_state(Config.save_dir)
     if ckpt and ckpt.model_checkpoint_path:
         saver.restore(sess, ckpt.model_checkpoint_path)
-        feed = {model.input_data: x}  # , model.initial_state: state}
+        feed = {}
+        feed[model.input_data] = x
+        feed[model.inputs_lengths] = [x.shape[1]]
         probs = sess.run([model.probs], feed)
         print(probs)
         print(capitalize_words(nltk.word_tokenize(sentence_to_capitalize), probs[0]))
 
         # eval test set accuracy
-        test_batches_x, test_batches_y = loader.get_test_set()
-        print('test_batches_x.shape, test_batches_y.shape', test_batches_x.shape, test_batches_y.shape)
-        feed = {model.input_data: test_batches_x, model.targets: test_batches_y}
-        print('Test set accuracy: ' + str(sess.run(model.accuracy, feed)))
+        # test_batches_x, test_batches_y = loader.get_test_set()
+        # print('test_batches_x.shape, test_batches_y.shape', test_batches_x.shape, test_batches_y.shape)
+        # feed = {model.input_data: test_batches_x, model.targets: test_batches_y}
+        # print('Test set accuracy: ' + str(sess.run(model.accuracy, feed)))
 
 tf.nn.dynamic_rnn()
