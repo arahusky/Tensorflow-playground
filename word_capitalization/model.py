@@ -90,3 +90,6 @@ class Model():
             correct_pred_masked = correct_pred * self.mask
 
             self.accuracy = tf.reduce_sum(correct_pred_masked) / tf.cast(tf.reduce_sum(self.inputs_lengths), tf.float32)
+            tf.scalar_summary('accuracy', self.accuracy)
+
+        self.summaries = tf.merge_all_summaries()

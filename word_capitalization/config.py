@@ -10,7 +10,7 @@ class Config():
     embedding_size = 100
     num_epochs = 50
     grad_clip = 5. # clip gradients at this value
-    learning_rate = 1e-3  # learning rate
+    learning_rate = 1e-4  # learning rate
 
     # Model parameters
     model = 'gru'  # rnn, gru, or lstm
@@ -18,6 +18,7 @@ class Config():
     rnn_size = 150 # size of RNN hidden state
 
     # other stuff
+    log_dir = 'logs' # to store TensorBoard logs
     save_dir = 'save' # directory to store checkpointed models
     save_every = 1000 # save frequency
     init_from = None # continue training from saved model at this path. Path must contain files saved by previous training process:

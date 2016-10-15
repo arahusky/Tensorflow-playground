@@ -31,7 +31,6 @@ config.vocab_size = len(vocab)
 
 
 words = nltk.word_tokenize(sentence_to_capitalize)
-print(words)
 x = np.array([vocab[word] for word in words])
 x = x.reshape((1,len(words)))
 print(sentence_to_capitalize, x, x.shape)
@@ -52,9 +51,9 @@ with tf.Session() as sess:
         print(capitalize_words(nltk.word_tokenize(sentence_to_capitalize), probs[0]))
 
         # eval test set accuracy
-        # test_batches_x, test_batches_y = loader.get_test_set()
-        # print('test_batches_x.shape, test_batches_y.shape', test_batches_x.shape, test_batches_y.shape)
-        # feed = {model.input_data: test_batches_x, model.targets: test_batches_y}
-        # print('Test set accuracy: ' + str(sess.run(model.accuracy, feed)))
-
-tf.nn.dynamic_rnn()
+        test_batches_x, test_batches_lengths, test_batches_y = loader.get_test_set()
+        feed = {}
+        feed[model.input_data] = test_batches_x
+        feed[model.inputs_lengths] = test_batches_lengths
+        feed[model.targets] = test_batches_y
+        print('Test set accuracy: ' + str(sess.run(model.accuracy, feed)))

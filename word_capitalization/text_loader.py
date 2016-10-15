@@ -89,9 +89,6 @@ class TextLoader():
         Returns vocabulary mapping and all appeared words.
         """
 
-        print(words[0])
-        print(type(words[0]))
-
         # Build vocabulary
         word_counts = collections.Counter(words)
         # for each word its number of occurence
@@ -191,10 +188,7 @@ class TextLoader():
         self.test_ydata = self.labels[num_train_samples + num_validation_samples:]
 
         # create numpy array for saving current batch
-        print(type(self.train_xdata))
-        print(type(self.train_xdata[0]))
         self.max_len = max([row.shape[0] for row in self.train_xdata])  # max len (in # words) of train sentence
-        print('self.max_len' + str(self.max_len))
         self.batch_x = np.zeros((self.batch_size, self.max_len), dtype=np.int32)
         self.batch_x_lenghts = np.zeros(self.batch_size, dtype=np.int32)  # contains for each train sentence its length
         self.batch_y = np.zeros((self.batch_size, self.max_len),
@@ -231,12 +225,9 @@ class TextLoader():
 
             for seq_ind in range(len(self.test_xdata[sample_ind])):
                 self.test_x_data[sample_ind][seq_ind] = self.test_xdata[sample_ind][seq_ind]
-                self.test_y_data[sample_ind][seq_ind] = self.test_y_data[sample_ind][seq_ind]
+                self.test_y_data[sample_ind][seq_ind] = self.test_ydata[sample_ind][seq_ind]
 
-        num_testdata_batches = testdata_samples / self.batch_size
-        return (
-        np.split(self.test_x_data, num_testdata_batches), np.split(self.test_x_data_lengths, num_testdata_batches),
-        np.split(self.test_y_data, num_testdata_batches))
+        return (self.test_x_data, self.test_x_data_lengths, self.test_y_data)
 
     def get_validation_set(self):
         '''

@@ -6,7 +6,10 @@ from model import Model
 from six.moves import cPickle
 import text_loader
 import model, config
+import numpy as np
+import datetime
 
+experiment_name = ''
 
 def train():
     config = Config()
@@ -49,6 +52,9 @@ def train():
     print('Creating model')
     model = Model(config)
 
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    summary_writer = tf.train.SummaryWriter('{}/{}-{}'.format(config.log_dir, timestamp, 'word_lr1e-4'), graph=tf.get_default_graph())
+
     print('Starting training')
     with tf.Session() as sess:
         tf.initialize_all_variables().run()
@@ -80,12 +86,13 @@ def train():
                     test_batches_x, test_batches_lengths, test_batches_y = data_loader.get_test_set()
 
                     accuracy = 0.0
-                    for test_x, test_lengths, test_y in zip(test_batches_x, test_batches_lengths, test_batches_y):
-                        feed = {model.input_data: test_x,
-                                model.targets: test_y,
-                                model.inputs_lengths: test_lengths}
-                        accuracy += sess.run(model.accuracy, feed)
-                    print('Test set accuracy is: ' + str(accuracy / len(test_batches_x)))
+                    feed = {}
+                    feed[model.input_data] = test_batches_x
+                    feed[model.inputs_lengths] = test_batches_lengths
+                    feed[model.targets] = test_batches_y
+                    summary, acc = sess.run([model.summaries, model.accuracy], feed)
+                    print('Test accuracy: ' + str(acc))
+                    summary_writer.add_summary(summary, e * data_loader.num_batches + b)
 
                 print("{}/{} (epoch {}), train_loss = {:.3f}, train_acc = {:.3f}, time/batch = {:.3f}" \
                       .format(e * data_loader.num_batches + b,
