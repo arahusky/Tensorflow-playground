@@ -18,11 +18,39 @@ class Model():
             raise Exception("model type not supported: {}".format(config.model))
 
         with tf.name_scope('inputs'):
-            self.input_data = tf.placeholder(tf.int32, [None, None])  # [batch_size, max_length]
-            self.inputs_lengths = tf.placeholder(tf.int32, [None])  # [batch_size]
-            self.targets = tf.placeholder(tf.int32, [None, None])  # same as input_data
-            batch_size = tf.shape(self.targets)[0]
-            max_length = tf.shape(self.targets)[1]
+            self.input_data = tf.placeholder(tf.int32, [None, None, None])  # [batch_size, max_sentence_words, max_word_chars]
+            self.word_counts = tf.placeholder(tf.int32, [None])  # [batch_size] - how many words are in each batch item
+            self.char_counts = tf.placeholder(tf.int32, [None, None]) # [batch_size, max_sentence_words] - how many chars each word of each batch has
+            self.targets = tf.placeholder(tf.int32, [None, None])  # [batch_size, max_sentence_words]
+            self.keep_prob = tf.placeholder(tf.float32) # dropout keep probability
+            batch_size = tf.shape(self.input_data)[0]
+            max_sentence_words = tf.shape(self.input_data)[1]
+            max_word_chars = tf.shape(self.input_data)[2]
+
+        with tf.name_scope('char-embedding'):
+            self.embedding = tf.get_variable("embedding", [config.vocab_size, config.rnn_size])
+            inputs = tf.nn.embedding_lookup(self.embedding, self.input_data) # inputs is now of dimension [batch_size, max_sentence_words, max_word_chars, config.rnn_size]
+
+        with tf.name_scope('word-embedding'):
+            concatenated_inputs = tf.reshape(inputs, [batch_size * max_sentence_words, max_word_chars, config.rnn_size])
+            char_lengths = tf.reshape(self.char_counts, [-1])
+            fw_emb_cell = cell_fn(config.rnn_size)
+            bw_emb_cell = cell_fn(config.rnn_size)
+
+            _, output_states = rnn.bidirectional_dynamic_rnn(fw_emb_cell, bw_emb_cell, concatenated_inputs,
+                                                        sequence_length=tf.cast(char_lengths, tf.int64),
+                                                        dtype=tf.float32)
+
+            output_state_fw, output_state_bw = output_states # the forward and the backward final states of bidirectional rnn, each of dimension [ batch_size * max_sentence_words, config.rnn_size]
+
+            W1 = tf.get_variable("W1", [config.rnn_size, config.embedding_size])
+            W2 = tf.get_variable("W2", [config.rnn_size, config.embedding_size])
+            b = tf.get_variable("b", [config.embedding_size])
+
+            word_embeddings = tf.matmul(output_state_fw, W1) + tf.matmul(output_state_bw, W2) + b
+            word_embeddings_reshaped = tf.reshape(word_embeddings, [batch_size, max_sentence_words, config.embedding_size])
+            word_embeddings_reshaped_dropout = tf.nn.dropout(word_embeddings_reshaped, keep_prob=self.keep_prob)
+
 
         with tf.name_scope('RNN_cells'):
             fw_cell = cell_fn(config.rnn_size)  # forward direction cell
@@ -31,12 +59,9 @@ class Model():
             self.fw_cell = rnn_cell.MultiRNNCell([fw_cell] * config.num_layers)
             self.bw_cell = rnn_cell.MultiRNNCell([bw_cell] * config.num_layers)
 
-        with tf.name_scope('embedding'):
-            self.embedding = tf.get_variable("embedding", [config.vocab_size, config.rnn_size])
-            inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
-        self.outputs, _ = rnn.bidirectional_dynamic_rnn(self.fw_cell, self.bw_cell, inputs,
-                                                        sequence_length=tf.cast(self.inputs_lengths, tf.int64),
+        self.outputs, _ = rnn.bidirectional_dynamic_rnn(self.fw_cell, self.bw_cell, word_embeddings_reshaped_dropout,
+                                                        sequence_length=tf.cast(self.word_counts, tf.int64),
                                                         dtype=tf.float32)
 
         '''
@@ -61,16 +86,16 @@ class Model():
             To filter out these 'behind values', we compute a binary mask having 1's for valid and 0's for invalid positions.
             '''
             cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                tf.reshape(self.logits, [batch_size, max_length, 2]), self.targets)
+                tf.reshape(self.logits, [batch_size, max_sentence_words, 2]), self.targets)
 
             with tf.name_scope('mask'):
                 # http://stackoverflow.com/questions/34128104/tensorflow-creating-mask-of-varied-lengths
                 # create a matrix with len(self.inputs_lengths) rows, where each row contains corresponding length repeated max_sequence_length times
-                lengths_transposed = tf.expand_dims(self.inputs_lengths, 1)
-                lengths_tiled = tf.tile(lengths_transposed, [1, max_length])
+                lengths_transposed = tf.expand_dims(self.word_counts, 1)
+                lengths_tiled = tf.tile(lengths_transposed, [1, max_sentence_words])
 
                 # create [len(self.inputs_lengths), max_sequence_length] matrix, where each row contains [0, 1, ..., max_sequence_length]
-                range = tf.range(0, max_length, 1)
+                range = tf.range(0, max_sentence_words, 1)
                 range_row = tf.expand_dims(range, 0)
                 range_tiled = tf.tile(range_row, [batch_size, 1])
 
@@ -78,18 +103,18 @@ class Model():
                 self.mask = tf.cast(tf.less(range_tiled, lengths_tiled), tf.float32)
 
             cross_entropy_masked = cross_entropy * self.mask
-            self.cost = tf.reduce_sum(cross_entropy_masked) / tf.cast(tf.reduce_sum(self.inputs_lengths), tf.float32)
+            self.cost = tf.reduce_sum(cross_entropy_masked) / tf.cast(tf.reduce_sum(self.word_counts), tf.float32)
 
             self.optimizer = tf.train.AdamOptimizer(learning_rate=config.learning_rate).minimize(self.cost)
             # TODO gradient clip?
 
         # accuracy
         with tf.name_scope('accuracy'):
-            argmax_probs = tf.reshape(tf.cast(tf.argmax(self.probs, dimension=1), tf.int32), [batch_size, max_length])
+            argmax_probs = tf.reshape(tf.cast(tf.argmax(self.probs, dimension=1), tf.int32), [batch_size, max_sentence_words])
             correct_pred = tf.cast(tf.equal(argmax_probs, self.targets), tf.float32)
             correct_pred_masked = correct_pred * self.mask
 
-            self.accuracy = tf.reduce_sum(correct_pred_masked) / tf.cast(tf.reduce_sum(self.inputs_lengths), tf.float32)
+            self.accuracy = tf.reduce_sum(correct_pred_masked) / tf.cast(tf.reduce_sum(self.word_counts), tf.float32)
             tf.scalar_summary('accuracy', self.accuracy)
 
         self.summaries = tf.merge_all_summaries()
