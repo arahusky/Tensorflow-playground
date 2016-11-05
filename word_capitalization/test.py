@@ -1,9 +1,9 @@
 import os
 import tensorflow as tf
 from six.moves import cPickle
-import text_loader
+import text_loader_bidi_word_model
 from config import Config
-import model
+import bidirectional_word_model
 import nltk
 import numpy as np
 
@@ -24,7 +24,7 @@ with open(os.path.join(new_config.save_dir, 'config.pkl'), 'rb') as f:
 
 sentence_to_capitalize = 'a man went to london on tuesday. this city lies in uk, where this peter griffin was born '
 
-loader = text_loader.TextLoader(config)
+loader = text_loader_bidi_word_model.TextLoader(config)
 
 vocab = loader.vocab
 config.vocab_size = len(vocab)
@@ -35,7 +35,7 @@ x = np.array([vocab[word] for word in words])
 x = x.reshape((1,len(words)))
 print(sentence_to_capitalize, x, x.shape)
 
-model = model.Model(config, infer=True)
+model = bidirectional_word_model.Model(config, infer=True)
 
 with tf.Session() as sess:
     tf.initialize_all_variables().run()

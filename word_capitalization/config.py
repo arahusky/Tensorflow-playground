@@ -7,8 +7,9 @@ class Config():
 
     # training parameters
     batch_size = 50
-    embedding_size = 100
-    num_epochs = 20
+    char_embedding_size = 100
+    word_embedding_size = 100
+    num_epochs = 200
     keep_prob = 0.5 # dropout keep probability during training
     grad_clip = 5. # clip gradients at this value
     learning_rate = 1e-4  # learning rate
@@ -16,10 +17,12 @@ class Config():
     # Model parameters
     model = 'gru'  # rnn, gru, or lstm
     num_layers = 3 # number of layers in the RNN
-    rnn_size = 200 # size of RNN hidden state
+    char_rnn_size = 100 # size of char-RNN hidden state
+    word_rnn_size = 200 # size of word-RNN hidden state
 
     # dataset
     max_words_in_sentence = 60 # remove all sentences having more words than this constant
+    unknown_symbol = '<UNK>'
 
     # other stuff
     log_dir = 'logs' # to store TensorBoard logs

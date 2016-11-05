@@ -1,22 +1,19 @@
 import time, os
 import tensorflow as tf
-from text_loader import TextLoader
 from config import Config
-from model import Model
 from six.moves import cPickle
-import text_loader
-import model, config
+import text_loader_for_bidi_char_model
+import bidirectional_char_model, config
 import numpy as np
 import datetime
 
-experiment_name = 'word_lr1e-3rnn_size300'
+experiment_name = 'char200_word100_UNK_model'
 
 def train():
     config = Config()
 
     print('Loading dataset')
-    data_loader = text_loader.TextLoader(config)
-    config.vocab_size = data_loader.vocab_size
+    data_loader = text_loader_for_bidi_char_model.TextLoader(config)
 
     # check compatibility if training is continued from previously saved model
     if config.init_from is not None:
@@ -42,15 +39,21 @@ def train():
         # open saved vocab/dict and check if vocabs/dicts are compatible
         with open(os.path.join(config.init_from, 'vocab.pkl'), 'rb') as f:
             saved_vocab = cPickle.load(f)
-        assert saved_vocab == data_loader.vocab, "Data and loaded model disagreee on dictionary mappings!"
+        assert saved_vocab == data_loader.char_vocab, "Data and loaded model disagreee on dictionary mappings!"
 
     with open(os.path.join(config.save_dir, 'config.pkl'), 'wb') as f:
         cPickle.dump(config, f)
     with open(os.path.join(config.save_dir, 'vocab.pkl'), 'wb') as f:
-        cPickle.dump(data_loader.vocab, f)
+        cPickle.dump(data_loader.char_vocab, f)
 
     print('Creating model')
-    model = Model(config)
+    model = bidirectional_char_model.Model(char_vocab_size = data_loader.char_vocab_size,
+                        word_vocab_size = data_loader.word_vocab_size,
+                        char_embedding_size = config.char_embedding_size,
+                        word_embedding_size = config.word_embedding_size,
+                        char_rnn_size = config.char_rnn_size,
+                        rnn_num_layers = config.num_layers,
+                        rnn_unit = config.model)
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
     summary_writer = tf.train.SummaryWriter('{}/{}-{}'.format(config.log_dir, timestamp, experiment_name), graph=tf.get_default_graph())
@@ -64,17 +67,25 @@ def train():
         # restore model
         if config.init_from is not None:
             saver.restore(sess, ckpt.model_checkpoint_path)
+
         for e in range(config.num_epochs):
             # sess.run(tf.assign(model.lr, config.learning_rate * (config.decay_rate ** e)))
             data_loader.reset_batch_pointer()
             for b in range(data_loader.num_batches):
                 start = time.time()
 
-                x, lengths, y = data_loader.next_batch()
-                print('x.shape' + str(x.shape) + 'y,shape' + str(y.shape))
-                feed = {model.input_data: x,
-                        model.targets: y,
-                        model.inputs_lengths: lengths}
+                input_data, input_data_lengths, batch_targets, batch_word_mapping, batch_input_words, batch_input_words_lengths \
+                    = data_loader.next_batch()
+                middle = time.time()
+                # print('x.shape' + str(input_data.shape) + 'y,shape' + str(batch_targets.shape))
+                feed = {model.input_data: input_data,
+                        model.input_data_lengths: input_data_lengths,
+                        model.targets: batch_targets,
+                        model.input_data_mapping: np.array(batch_word_mapping.values()).reshape([len(batch_word_mapping.keys()), 1]),
+                        model.input_words: batch_input_words,
+                        model.input_words_lengths: batch_input_words_lengths,
+                        model.keep_prob: config.keep_prob}
+                # train_loss, acc, _ = sess.run([model.cost, model.accuracy, model.optimizer], feed)
                 train_loss, acc, _ = sess.run([model.cost, model.accuracy, model.optimizer], feed)
                 end = time.time()
 
@@ -84,22 +95,33 @@ def train():
                     checkpoint_path = os.path.join(config.save_dir, 'model.ckpt')
                     saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b)
                     print("model saved to {}".format(checkpoint_path))
-                elif ((e * data_loader.num_batches + b) % 100 == 0):  # print test accuracy
-                    test_batches_x, test_batches_lengths, test_batches_y = data_loader.get_test_set()
+                if ((e * data_loader.num_batches + b) % 100 == 0):  # print test accuracy
+                    test_input_data, test_input_data_lengths, test_targets, test_word_mapping, test_input_words, \
+                    test_input_words_lengths = data_loader.get_test_set()
+                    # print('input_words.shape' + str(test_input_data.shape))
+                    feed = {model.input_data: test_input_data,
+                            model.input_data_lengths: test_input_data_lengths,
+                            model.targets: test_targets,
+                            model.input_data_mapping: np.array(test_word_mapping.values()).reshape(
+                                [len(test_word_mapping.keys()), 1]),
+                            model.input_words: test_input_words,
+                            model.input_words_lengths: test_input_words_lengths,
+                            model.keep_prob: 1.0}
 
-                    accuracy = 0.0
-                    feed = {}
-                    feed[model.input_data] = test_batches_x
-                    feed[model.inputs_lengths] = test_batches_lengths
-                    feed[model.targets] = test_batches_y
                     summary, acc = sess.run([model.summaries, model.accuracy], feed)
                     print('Test accuracy: ' + str(acc))
                     summary_writer.add_summary(summary, e * data_loader.num_batches + b)
 
-                print("{}/{} (epoch {}), train_loss = {:.3f}, train_acc = {:.3f}, time/batch = {:.3f}" \
+                msg = ("{}/{} (epoch {}), train_loss = {:.3f}, train_acc = {:.3f}, time/batch = {:.3f}" \
                       .format(e * data_loader.num_batches + b,
                               config.num_epochs * data_loader.num_batches,
                               e, train_loss, acc, end - start))
+
+                with open('output_both.txt', 'a') as writer:
+                    writer.write(msg + "\n")
+
+                print(msg)
+                print("Batch prepare took: {}".format(middle - start))
 
 
 if __name__ == '__main__':

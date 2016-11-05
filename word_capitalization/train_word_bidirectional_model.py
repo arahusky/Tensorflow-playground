@@ -1,19 +1,21 @@
 import time, os
 import tensorflow as tf
+from text_loader_bidi_word_model import TextLoader
 from config import Config
+from bidirectional_word_model import Model
 from six.moves import cPickle
-import text_loader_chars
-import char_model, config
+import text_loader_bidi_word_model
+import bidirectional_word_model, config
 import numpy as np
 import datetime
 
-experiment_name = 'char_model'
+experiment_name = 'word_lr1e-3rnn_size300'
 
 def train():
     config = Config()
 
     print('Loading dataset')
-    data_loader = text_loader_chars.TextLoader(config)
+    data_loader = text_loader_bidi_word_model.TextLoader(config)
     config.vocab_size = data_loader.vocab_size
 
     # check compatibility if training is continued from previously saved model
@@ -48,7 +50,7 @@ def train():
         cPickle.dump(data_loader.vocab, f)
 
     print('Creating model')
-    model = char_model.Model(config)
+    model = Model(config)
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
     summary_writer = tf.train.SummaryWriter('{}/{}-{}'.format(config.log_dir, timestamp, experiment_name), graph=tf.get_default_graph())
@@ -68,15 +70,11 @@ def train():
             for b in range(data_loader.num_batches):
                 start = time.time()
 
-                x, lengths_w, lengths_c, y = data_loader.next_batch()
-                middle = time.time()
+                x, lengths, y = data_loader.next_batch()
                 print('x.shape' + str(x.shape) + 'y,shape' + str(y.shape))
                 feed = {model.input_data: x,
                         model.targets: y,
-                        model.word_counts: lengths_w,
-                        model.keep_prob: config.keep_prob,
-                        model.char_counts: lengths_c}
-                # train_loss, acc, _ = sess.run([model.cost, model.accuracy, model.optimizer], feed)
+                        model.inputs_lengths: lengths}
                 train_loss, acc, _ = sess.run([model.cost, model.accuracy, model.optimizer], feed)
                 end = time.time()
 
@@ -87,15 +85,13 @@ def train():
                     saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b)
                     print("model saved to {}".format(checkpoint_path))
                 elif ((e * data_loader.num_batches + b) % 100 == 0):  # print test accuracy
-                    test_batches_x, test_word_lengths, test_char_lengths, test_batches_y = data_loader.get_test_set()
+                    test_batches_x, test_batches_lengths, test_batches_y = data_loader.get_test_set()
 
                     accuracy = 0.0
                     feed = {}
                     feed[model.input_data] = test_batches_x
-                    feed[model.word_counts] = test_word_lengths
-                    feed[model.char_counts] = test_char_lengths
+                    feed[model.inputs_lengths] = test_batches_lengths
                     feed[model.targets] = test_batches_y
-                    feed[model.keep_prob] = 1.0
                     summary, acc = sess.run([model.summaries, model.accuracy], feed)
                     print('Test accuracy: ' + str(acc))
                     summary_writer.add_summary(summary, e * data_loader.num_batches + b)
@@ -104,7 +100,6 @@ def train():
                       .format(e * data_loader.num_batches + b,
                               config.num_epochs * data_loader.num_batches,
                               e, train_loss, acc, end - start))
-                print("Batch prepare took: {}".format(middle - start))
 
 
 if __name__ == '__main__':

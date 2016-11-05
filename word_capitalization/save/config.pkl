@@ -2,7 +2,4 @@
 Config
 p1
 (dp2
-S'vocab_size'
-p3
-I15648
-sb.
+b.
